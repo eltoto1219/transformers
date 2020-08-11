@@ -531,17 +531,17 @@ class LxmertPredictionHeadTransform(nn.Module):
 
 
 class LxmertLMPredictionHead(nn.Module):
-    def __init__(self, config, bert_model_embedding_weights):
+    def __init__(self, config, lxmert_model_embedding_weights):
         super(LxmertLMPredictionHead, self).__init__()
         self.transform = LxmertPredictionHeadTransform(config)
 
         # The output weights are the same as the input embeddings, but there is
         # an output-only bias for each token.
         self.decoder = nn.Linear(
-            bert_model_embedding_weights.size(1), bert_model_embedding_weights.size(0), bias=False
+            lxmert_model_embedding_weights.size(1), lxmert_model_embedding_weights.size(0), bias=False
         )
-        self.decoder.weight = bert_model_embedding_weights
-        self.bias = nn.Parameter(torch.zeros(bert_model_embedding_weights.size(0)))
+        self.decoder.weight = lxmert_model_embedding_weights
+        self.bias = nn.Parameter(torch.zeros(lxmert_model_embedding_weights.size(0)))
 
     def forward(self, hidden_states):
         hidden_states = self.transform(hidden_states)
@@ -593,9 +593,9 @@ class LxmertVisualObjHead(nn.Module):
 
 
 class LxmertPreTrainingHeads(nn.Module):
-    def __init__(self, config, bert_model_embedding_weights):
+    def __init__(self, config, lxmert_model_embedding_weights):
         super(LxmertPreTrainingHeads, self).__init__()
-        self.predictions = LxmertLMPredictionHead(config, bert_model_embedding_weights)
+        self.predictions = LxmertLMPredictionHead(config, lxmert_model_embedding_weights)
         self.seq_relationship = nn.Linear(config.hidden_size, 2)
 
     def forward(self, sequence_output, pooled_output):
@@ -818,10 +818,10 @@ class LxmertForPretraining(LxmertPreTrainedModel):
         self.task_qa = config.task_qa
 
         # Lxmert backbone
-        self.bert = LxmertModel(config)
+        self.lxmert = LxmertModel(config)
 
         # Pre-training heads
-        self.cls = LxmertPreTrainingHeads(config, self.bert.embeddings.word_embeddings.weight)
+        self.cls = LxmertPreTrainingHeads(config, self.lxmert.embeddings.word_embeddings.weight)
         if self.task_obj_predict:
             self.obj_predict_head = LxmertVisualObjHead(config)
         if self.task_qa:
@@ -981,7 +981,7 @@ class LxmertForPretraining(LxmertPreTrainedModel):
             (lang_output, visn_output, pooled_output),
             x_encoder_outputs,
             (attentions_v_encoder, attentions_l_encoder, attentions_x_encoder),
-        ) = self.bert(
+        ) = self.lxmert(
             input_ids=input_ids,
             visual_feats=(visual_feats, pos),
             token_type_ids=token_type_ids,
@@ -1061,7 +1061,7 @@ class LxmertForQuestionAnswering(LxmertPreTrainedModel):
         self.visual_loss_normalizer = config.visual_loss_normalizer
 
         # Lxmert backbone
-        self.bert = LxmertModel(config)
+        self.lxmert = LxmertModel(config)
 
         self.answer_head = LxmertVisualAnswerHead(config, self.num_qa_labels)
 
@@ -1187,7 +1187,7 @@ class LxmertForQuestionAnswering(LxmertPreTrainedModel):
             (lang_output, visn_output, pooled_output),
             x_encoder_outputs,
             (attentions_v_encoder, attentions_l_encoder, attentions_x_encoder),
-        ) = self.bert(
+        ) = self.lxmert(
             input_ids=input_ids,
             visual_feats=(visual_feats, pos),
             token_type_ids=token_type_ids,
