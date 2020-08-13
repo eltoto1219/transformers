@@ -16,7 +16,7 @@
 
 import unittest
 
-from transformers import is_torch_available
+from transformers import is_torch_available, MODEL_FOR_QUESTION_ANSWERING_MAPPING
 from transformers.testing_utils import require_torch, slow, torch_device
 
 from .test_configuration_common import ConfigTester
@@ -120,6 +120,11 @@ class LxmertModelTester:
         self.output_attentions = output_attentions
         self.output_hidden_states = output_hidden_states
         self.scope = scope
+        self.num_hidden_layers = {
+            "vision": r_layers,
+            "cross_encoder": x_layers,
+            "language": l_layers
+        }
 
     def prepare_config_and_inputs(self):
 
@@ -160,9 +165,9 @@ class LxmertModelTester:
         masked_lm_labels = None
         if self.task_mask_lm:
             masked_lm_labels = ids_tensor([self.batch_size, self.seq_length], self.vocab_size)
-        matched_labels = None
+        matched_label = None
         if self.task_matched:
-            matched_labels = ids_tensor([self.batch_size], self.num_labels)
+            matched_label = ids_tensor([self.batch_size], self.num_labels)
 
         config = LxmertConfig(
             vocab_size=self.vocab_size,
@@ -207,7 +212,7 @@ class LxmertModelTester:
             input_mask,
             obj_labels,
             masked_lm_labels,
-            matched_labels,
+            matched_label,
             ans,
             output_attentions,
         )
@@ -222,7 +227,7 @@ class LxmertModelTester:
         input_mask,
         obj_labels,
         masked_lm_labels,
-        matched_labels,
+        matched_label,
         ans,
         output_attentions,
     ):
@@ -246,11 +251,11 @@ class LxmertModelTester:
         result = model(input_ids, (visual_feats, bounding_boxes), return_dict=False)
         result = model(input_ids, (visual_feats, bounding_boxes), return_dict=True)
 
-        self.parent.assertEqual(result.last_hidden_state_l.shape, (self.batch_size, self.seq_length, self.hidden_size))
+        self.parent.assertEqual(result.language_output.shape, (self.batch_size, self.seq_length, self.hidden_size))
         self.parent.assertEqual(
-            result.last_hidden_state_v.shape, (self.batch_size, self.num_visual_features, self.hidden_size)
+            result.vision_output.shape, (self.batch_size, self.num_visual_features, self.hidden_size)
         )
-        self.parent.assertEqual(result.pooled_output_x_encoder.shape, (self.batch_size, self.hidden_size))
+        self.parent.assertEqual(result.pooled_output.shape, (self.batch_size, self.hidden_size))
 
     def create_and_check_lxmert_for_question_answering(
         self,
@@ -262,7 +267,7 @@ class LxmertModelTester:
         input_mask,
         obj_labels,
         masked_lm_labels,
-        matched_labels,
+        matched_label,
         ans,
         output_attentions,
     ):
@@ -272,27 +277,17 @@ class LxmertModelTester:
         result = model(
             input_ids,
             (visual_feats, bounding_boxes),
-            ans,
             token_type_ids=token_type_ids,
             attention_mask=input_mask,
-            masked_lm_labels=masked_lm_labels,
+            ans=ans,
             output_attentions=output_attentions,
             return_dict=True,
         )
+        result = model(input_ids, (visual_feats, bounding_boxes), ans=ans)
         result = model(
             input_ids,
             (visual_feats, bounding_boxes),
-            ans,
-            token_type_ids=token_type_ids,
-            attention_mask=input_mask,
-            output_attentions=not output_attentions,
-            return_dict=False,
-        )
-        result = model(input_ids, (visual_feats, bounding_boxes), ans)
-        result = model(
-            input_ids,
-            (visual_feats, bounding_boxes),
-            ans,
+            ans=ans,
             token_type_ids=token_type_ids,
             attention_mask=input_mask,
             output_attentions=output_attentions,
@@ -300,9 +295,9 @@ class LxmertModelTester:
         result = model(
             input_ids,
             (visual_feats, bounding_boxes),
-            ans,
             token_type_ids=token_type_ids,
             attention_mask=input_mask,
+            ans=ans,
             output_attentions=not output_attentions,
             return_dict=True,
         )
@@ -319,7 +314,7 @@ class LxmertModelTester:
         input_mask,
         obj_labels,
         masked_lm_labels,
-        matched_labels,
+        matched_label,
         ans,
         output_attentions,
     ):
@@ -333,7 +328,7 @@ class LxmertModelTester:
             attention_mask=input_mask,
             masked_lm_labels=masked_lm_labels,
             obj_labels=obj_labels,
-            matched_label=matched_labels,
+            matched_label=matched_label,
             ans=ans,
             output_attentions=output_attentions,
             return_dict=True,
@@ -366,7 +361,7 @@ class LxmertModelTester:
             (visual_feats, bounding_boxes),
             token_type_ids=token_type_ids,
             attention_mask=input_mask,
-            matched_labels=matched_labels,
+            matched_label=matched_label,
         )
         result = model(
             input_ids,
@@ -382,7 +377,7 @@ class LxmertModelTester:
             attention_mask=input_mask,
             masked_lm_labels=masked_lm_labels,
             obj_labels=obj_labels,
-            matched_label=matched_labels,
+            matched_label=matched_label,
             ans=ans,
             output_attentions=not output_attentions,
             return_dict=True,
@@ -400,7 +395,7 @@ class LxmertModelTester:
         input_mask,
         obj_labels,
         masked_lm_labels,
-        matched_labels,
+        matched_label,
         ans,
         output_attentions,
     ):
@@ -427,7 +422,7 @@ class LxmertModelTester:
         result_qa = model_qa(
             input_ids,
             (visual_feats, bounding_boxes),
-            ans,
+            ans=ans,
             token_type_ids=token_type_ids,
             attention_mask=input_mask,
             return_dict=True,
@@ -469,7 +464,7 @@ class LxmertModelTester:
         result_qa_more = model_qa(
             input_ids,
             (visual_feats, bounding_boxes),
-            more_labels_ans,
+            ans=more_labels_ans,
             token_type_ids=token_type_ids,
             attention_mask=input_mask,
             return_dict=True,
@@ -501,7 +496,7 @@ class LxmertModelTester:
             input_mask,
             obj_labels,
             masked_lm_labels,
-            matched_labels,
+            matched_label,
             ans,
             output_attentions,
         ) = config_and_inputs
@@ -518,9 +513,13 @@ class LxmertModelTester:
 
 
 @require_torch
-class LxmertModelTest(unittest.TestCase):
+class LxmertModelTest(ModelTesterMixin, unittest.TestCase):
 
     all_model_classes = (LxmertModel, LxmertForPretraining) if is_torch_available() else ()
+
+    test_head_masking = False
+    test_pruning = False
+    test_torchscript = False
 
     def setUp(self):
         self.model_tester = LxmertModelTester(self)
@@ -537,7 +536,7 @@ class LxmertModelTest(unittest.TestCase):
         config_and_inputs = self.model_tester.prepare_config_and_inputs()
         self.model_tester.create_and_check_lxmert_for_question_answering(*config_and_inputs)
 
-    def test_lxmert_pretraning(self):
+    def test_lxmert_pretraining(self):
         config_and_inputs = self.model_tester.prepare_config_and_inputs()
         self.model_tester.create_and_check_lxmert_for_pretraining(*config_and_inputs)
 
@@ -550,3 +549,139 @@ class LxmertModelTest(unittest.TestCase):
         for model_name in LXMERT_PRETRAINED_MODEL_ARCHIVE_LIST[:1]:
             model = LxmertModel.from_pretrained(model_name)
             self.assertIsNotNone(model)
+
+    def test_attention_outputs(self):
+        config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
+        seq_len = getattr(self.model_tester, "seq_length", None)
+        decoder_seq_length = getattr(self.model_tester, "decoder_seq_length", seq_len)
+        encoder_seq_length = getattr(self.model_tester, "encoder_seq_length", seq_len)
+        decoder_key_length = getattr(self.model_tester, "key_length", decoder_seq_length)
+        encoder_key_length = getattr(self.model_tester, "key_length", encoder_seq_length)
+        chunk_length = getattr(self.model_tester, "chunk_length", None)
+        if chunk_length is not None and hasattr(self.model_tester, "num_hashes"):
+            encoder_seq_length = encoder_seq_length * self.model_tester.num_hashes
+
+        for model_class in self.all_model_classes:
+            inputs_dict["output_attentions"] = True
+            inputs_dict["output_hidden_states"] = False
+            model = model_class(config)
+            model.to(torch_device)
+            model.eval()
+            with torch.no_grad():
+                outputs = model(**self._prepare_for_class(inputs_dict, model_class))
+
+            language_attentions, vision_attentions, cross_encoder_attentions = (
+                outputs[-3], outputs[-2], outputs[-1]
+            )
+
+            self.assertEqual(len(language_attentions), self.model_tester.num_hidden_layers["language"])
+            self.assertEqual(len(vision_attentions), self.model_tester.num_hidden_layers["vision"])
+            self.assertEqual(len(cross_encoder_attentions), self.model_tester.num_hidden_layers["cross_encoder"])
+
+            # check that output_attentions also work using config
+            del inputs_dict["output_attentions"]
+            config.output_attentions = True
+            model = model_class(config)
+            model.to(torch_device)
+            model.eval()
+            with torch.no_grad():
+                outputs = model(**self._prepare_for_class(inputs_dict, model_class))
+
+            language_attentions, vision_attentions, cross_encoder_attentions = (
+                outputs[-3], outputs[-2], outputs[-1]
+            )
+
+            self.assertEqual(len(language_attentions), self.model_tester.num_hidden_layers["language"])
+            self.assertEqual(len(vision_attentions), self.model_tester.num_hidden_layers["vision"])
+            self.assertEqual(len(cross_encoder_attentions), self.model_tester.num_hidden_layers["cross_encoder"])
+
+            attentions = [language_attentions, vision_attentions, cross_encoder_attentions]
+            attention_shapes = [
+                [self.model_tester.num_attention_heads, encoder_seq_length, encoder_key_length],
+                [self.model_tester.num_attention_heads, self.model_tester.num_visual_features, self.model_tester.num_visual_features],
+                [self.model_tester.num_attention_heads, encoder_key_length, self.model_tester.num_visual_features]
+            ]
+
+            for attention, attention_shape in zip(attentions, attention_shapes):
+                self.assertListEqual(
+                    list(attention[0].shape[-3:]),
+                    attention_shape
+                )
+            out_len = len(outputs)
+
+            if self.is_encoder_decoder:
+                correct_outlen = 4
+                decoder_attention_idx = 1
+
+                # loss is at first position
+                if "labels" in inputs_dict:
+                    correct_outlen += 1  # loss is added to beginning
+                    decoder_attention_idx += 1
+                # Question Answering model returns start_logits and end_logits
+                if model_class in MODEL_FOR_QUESTION_ANSWERING_MAPPING.values():
+                    correct_outlen += 1  # start_logits and end_logits instead of only 1 output
+                    decoder_attention_idx += 1
+                self.assertEqual(out_len, correct_outlen)
+
+                decoder_attentions = outputs[decoder_attention_idx]
+                self.assertIsInstance(decoder_attentions, (list, tuple))
+                self.assertEqual(len(decoder_attentions), self.model_tester.num_hidden_layers)
+                self.assertListEqual(
+                    list(decoder_attentions[0].shape[-3:]),
+                    [self.model_tester.num_attention_heads, decoder_seq_length, decoder_key_length],
+                )
+
+            # Check attention is always last and order is fine
+            inputs_dict["output_attentions"] = True
+            inputs_dict["output_hidden_states"] = True
+            model = model_class(config)
+            model.to(torch_device)
+            model.eval()
+            with torch.no_grad():
+                outputs = model(**self._prepare_for_class(inputs_dict, model_class))
+
+            # 2 hidden states were added
+            self.assertEqual(out_len + 2, len(outputs))
+
+            language_attentions, vision_attentions, cross_encoder_attentions = (
+                outputs[-3], outputs[-2], outputs[-1]
+            )
+
+            self.assertEqual(len(language_attentions), self.model_tester.num_hidden_layers["language"])
+            self.assertEqual(len(vision_attentions), self.model_tester.num_hidden_layers["vision"])
+            self.assertEqual(len(cross_encoder_attentions), self.model_tester.num_hidden_layers["cross_encoder"])
+
+            attentions = [language_attentions, vision_attentions, cross_encoder_attentions]
+            attention_shapes = [
+                [self.model_tester.num_attention_heads, encoder_seq_length, encoder_key_length],
+                [self.model_tester.num_attention_heads, self.model_tester.num_visual_features, self.model_tester.num_visual_features],
+                [self.model_tester.num_attention_heads, encoder_key_length, self.model_tester.num_visual_features]
+            ]
+
+            for attention, attention_shape in zip(attentions, attention_shapes):
+                self.assertListEqual(
+                    list(attention[0].shape[-3:]),
+                    attention_shape
+                )
+
+    def test_hidden_states_output(self):
+        def check_hidden_states_output(inputs_dict, config, model_class):
+            model = model_class(config)
+            model.to(torch_device)
+            model.eval()
+
+            with torch.no_grad():
+                outputs = model(**self._prepare_for_class(inputs_dict, model_class))
+            hidden_states = outputs[-1]
+
+            self.assertEqual(len(hidden_states), self.model_tester.num_hidden_layers + 1)
+            if hasattr(self.model_tester, "encoder_seq_length"):
+                seq_length = self.model_tester.encoder_seq_length
+                if hasattr(self.model_tester, "chunk_length") and self.model_tester.chunk_length > 1:
+                    seq_length = seq_length * self.model_tester.chunk_length
+            else:
+                seq_length = self.model_tester.seq_length
+
+            self.assertListEqual(
+                list(hidden_states[0].shape[-2:]), [seq_length, self.model_tester.hidden_size],
+            )

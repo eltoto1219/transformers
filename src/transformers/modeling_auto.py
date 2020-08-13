@@ -42,6 +42,7 @@ from .configuration_auto import (
     XLMConfig,
     XLMRobertaConfig,
     XLNetConfig,
+    LxmertConfig,
 )
 from .configuration_marian import MarianConfig
 from .configuration_utils import PretrainedConfig
@@ -69,6 +70,11 @@ from .modeling_bert import (
     BertForTokenClassification,
     BertLMHeadModel,
     BertModel,
+)
+from .modeling_lxmert import (
+    LxmertForPretraining,
+    LxmertForQuestionAnswering,
+    LxmertModel
 )
 from .modeling_camembert import (
     CamembertForMaskedLM,
@@ -193,6 +199,7 @@ MODEL_MAPPING = OrderedDict(
         (CTRLConfig, CTRLModel),
         (ElectraConfig, ElectraModel),
         (ReformerConfig, ReformerModel),
+        (LxmertConfig, LxmertForPretraining),
     ]
 )
 
@@ -217,6 +224,7 @@ MODEL_FOR_PRETRAINING_MAPPING = OrderedDict(
         (XLMConfig, XLMWithLMHeadModel),
         (CTRLConfig, CTRLLMHeadModel),
         (ElectraConfig, ElectraForPreTraining),
+        (LxmertConfig, LxmertForQuestionAnswering),
     ]
 )
 
@@ -323,6 +331,7 @@ MODEL_FOR_QUESTION_ANSWERING_MAPPING = OrderedDict(
         (XLMConfig, XLMForQuestionAnsweringSimple),
         (ElectraConfig, ElectraForQuestionAnswering),
         (ReformerConfig, ReformerForQuestionAnswering),
+        (LxmertConfig, LxmertForQuestionAnswering)
     ]
 )
 
